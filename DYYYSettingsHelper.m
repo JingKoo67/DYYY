@@ -57,7 +57,7 @@
               @"DYYYisShowScheduleDisplay" : @[ @"DYYYScheduleStyle", @"DYYYProgressLabelColor", @"DYYYTimelineVerticalPosition" ],
               @"DYYYEnableNotificationTransparency" : @[ @"DYYYNotificationCornerRadius" ],
               @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
-              @"DYYYEnableFloatClearButton" : @[ @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYEnabshijianjindu", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar", @"DYYYHideSpeed" ],
+              @"DYYYEnableFloatClearButton" : @[ @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYEnabshijianjindu", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar", @"DYYYHideSpeed", @"DYYYHideChapter" ],
           },
 
           // ===== 条件依赖配置 =====
@@ -71,8 +71,6 @@
           @"conflicts" : @{
               @"DYYYEnableDoubleOpenComment" : @[ @"DYYYEnableDoubleOpenAlertController" ],
               @"DYYYEnableDoubleOpenAlertController" : @[ @"DYYYEnableDoubleOpenComment" ],
-              @"DYYYABTestBlockEnabled" : @[ @"DYYYABTestPatchEnabled" ],
-              @"DYYYABTestPatchEnabled" : @[ @"DYYYABTestBlockEnabled" ],
               @"DYYYEnabshijianjindu" : @[ @"DYYYHideTimeProgress" ],
               @"DYYYHideTimeProgress" : @[ @"DYYYEnabshijianjindu" ],
               @"DYYYHideLOTAnimationView" : @[ @"DYYYHideFollowPromptView" ],
@@ -86,8 +84,6 @@
           @"mutualExclusive" : @{
               @"DYYYEnableDoubleOpenComment" : @[ @"DYYYEnableDoubleOpenAlertController" ],
               @"DYYYEnableDoubleOpenAlertController" : @[ @"DYYYEnableDoubleOpenComment" ],
-              @"DYYYABTestBlockEnabled" : @[ @"DYYYABTestPatchEnabled" ],
-              @"DYYYABTestPatchEnabled" : @[ @"DYYYABTestBlockEnabled" ],
               @"DYYYEnabshijianjindu" : @[ @"DYYYHideTimeProgress" ],
               @"DYYYHideTimeProgress" : @[ @"DYYYEnabshijianjindu" ],
               @"DYYYHideLOTAnimationView" : @[ @"DYYYHideFollowPromptView" ],

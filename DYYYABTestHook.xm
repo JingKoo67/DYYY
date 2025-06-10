@@ -66,35 +66,6 @@ void ensureABTestDataLoaded(void) {
 	});
 }
 
-// 优化防止频繁加载
-NSDictionary *loadFixedABTestData(void) {
-	if (gDataLoaded) {
-		return gFileExists ? gFixedABTestData : nil;
-	}
-
-	NSDate *now = [NSDate date];
-	if (lastLoadAttemptTime && [now timeIntervalSinceDate:lastLoadAttemptTime] < kMinLoadInterval) {
-		return gFileExists ? gFixedABTestData : nil;
-	}
-
-	lastLoadAttemptTime = now;
-
-	ensureABTestDataLoaded();
-	return gFileExists ? gFixedABTestData : nil;
-}
-
-static NSDictionary *fixedABTestData(void) {
-	if (!abTestBlockEnabled) {
-		return nil;
-	}
-
-	if (!gDataLoaded) {
-		ensureABTestDataLoaded();
-	}
-
-	return gFileExists ? gFixedABTestData : nil;
-}
-
 // 获取当前ABTest数据
 NSDictionary *getCurrentABTestData(void) {
 	if (abTestBlockEnabled) {
@@ -201,22 +172,4 @@ static NSMutableDictionary *gCaseCache = nil;
     %init;
     abTestBlockEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYABTestBlockEnabled"];
     abTestPatchEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYABTestPatchEnabled"];
-
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        AWEABTestManager *manager = [%c(AWEABTestManager) sharedManager];
-        if (manager && gFixedABTestData && abTestBlockEnabled && !abTestPatchEnabled) {
-            [manager setAbTestData:gFixedABTestData];
-
-            if ([manager respondsToSelector:@selector(_saveABTestData:)]) {
-                [manager _saveABTestData:gFixedABTestData];
-            }
-
-            gABTestDataFixed = YES;
-        } else {
-            NSLog(@"[DYYY] 无法设置ABTest数据: manager=%@, data=%@, 模式=%@", 
-                manager, 
-                gFixedABTestData ? @"已加载" : @"未加载",
-                abTestPatchEnabled ? @"补丁模式" : (abTestBlockEnabled ? @"完全替换模式" : @"未启用"));
-        }
-    });
 }
