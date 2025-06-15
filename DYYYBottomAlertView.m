@@ -6,113 +6,22 @@
 
 + (UIViewController *)showAlertWithTitle:(NSString *)title
                                  message:(NSString *)message
-                         cancelButtonText:(NSString *)cancelButtonText
-                        confirmButtonText:(NSString *)confirmButtonText
+                               avatarURL:(nullable NSString *)avatarURL
+                        cancelButtonText:(nullable NSString *)cancelButtonText
+                       confirmButtonText:(nullable NSString *)confirmButtonText
                             cancelAction:(DYYYAlertActionHandler)cancelAction
+                             closeAction:(nullable DYYYAlertActionHandler)closeAction
                            confirmAction:(DYYYAlertActionHandler)confirmAction {
     
     AFDPrivacyHalfScreenViewController *vc = [NSClassFromString(@"AFDPrivacyHalfScreenViewController") new];
     
-    if (!cancelButtonText) {
+    if (!vc) return nil;
+
+    if (cancelButtonText.length == 0) {
         cancelButtonText = @"取消";
     }
     
-    if (!confirmButtonText) {
-        confirmButtonText = @"确定";
-    }
-    
-    DYYYAlertActionHandler wrappedCancelAction = ^{
-        [self dismissAlertViewController:vc];
-        if (cancelAction) {
-            cancelAction();
-        }
-    };
-    
-    DYYYAlertActionHandler wrappedConfirmAction = ^{
-        [self dismissAlertViewController:vc];
-        if (confirmAction) {
-            confirmAction();
-        }
-    };
-    
-    [vc setSlideDismissBlock:^{
-        [self dismissAlertViewController:vc];
-    }];
-    
-    [vc setTapDismissBlock:^{
-        [self dismissAlertViewController:vc];
-    }];
-    
-    [vc configWithImageView:nil 
-                  lockImage:nil 
-           defaultLockState:NO 
-            titleLabelText:title 
-          contentLabelText:message 
-      leftCancelButtonText:cancelButtonText 
-    rightConfirmButtonText:confirmButtonText 
-       rightBtnClickedBlock:wrappedConfirmAction
-      leftButtonClickedBlock:wrappedCancelAction];
-    
-    [vc setUseCardUIStyle:YES];
-
-    UIViewController *topVC = topView(); 
-    if (topVC) {
-        if ([vc respondsToSelector:@selector(presentOnViewController:)]) {
-            [vc presentOnViewController:topVC];
-        }
-    }
-    return vc;
-}
-
-+ (void)dismissAlertViewController:(UIViewController *)viewController {
-    if (!viewController) return;
-    
-    if ([NSThread isMainThread]) {
-        [viewController dismissViewControllerAnimated:YES completion:nil];
-    }
-}
-
-+ (UIViewController *)showAlertWithTitle:(NSString *)title
-                                 message:(NSString *)message
-                            cancelAction:(DYYYAlertActionHandler)cancelAction
-                           confirmAction:(DYYYAlertActionHandler)confirmAction {
-    return [self showAlertWithTitle:title
-                            message:message
-                    cancelButtonText:@"取消"
-                   confirmButtonText:@"确定"
-                        cancelAction:cancelAction
-                       confirmAction:confirmAction];
-}
-
-+ (UIViewController *)showAlertWithTitle:(NSString *)title
-                                 message:(NSString *)message
-                               avatarURL:(NSString *)avatarURL
-                            cancelAction:(DYYYAlertActionHandler)cancelAction
-                           confirmAction:(DYYYAlertActionHandler)confirmAction {
-    return [self showAlertWithTitle:title
-                            message:message
-                          avatarURL:avatarURL
-                    cancelButtonText:@"取消"
-                   confirmButtonText:@"确定"
-                        cancelAction:cancelAction
-                       confirmAction:confirmAction];
-}
-
-+ (UIViewController *)showAlertWithTitle:(NSString *)title
-                                 message:(NSString *)message
-                               avatarURL:(NSString *)avatarURL
-                         cancelButtonText:(NSString *)cancelButtonText
-                        confirmButtonText:(NSString *)confirmButtonText
-                            cancelAction:(DYYYAlertActionHandler)cancelAction
-                           confirmAction:(DYYYAlertActionHandler)confirmAction {
-    
-    AFDPrivacyHalfScreenViewController *vc = [NSClassFromString(@"AFDPrivacyHalfScreenViewController") new];
-    
-    if (!cancelButtonText) {
-        cancelButtonText = @"取消";
-    }
-    
-    if (!confirmButtonText) {
+    if (confirmButtonText.length == 0) {
         confirmButtonText = @"确定";
     }
     
@@ -145,48 +54,53 @@
     }
     
     DYYYAlertActionHandler wrappedCancelAction = ^{
-        [self dismissAlertViewController:vc];
-        if (cancelAction) {
-            cancelAction();
+        if (cancelAction) cancelAction();
+    };
+    
+    DYYYAlertActionHandler wrappedCloseActionBlock = ^{
+        if (closeAction) {
+            closeAction();
+        } else {
+        wrappedCancelAction();
         }
     };
     
     DYYYAlertActionHandler wrappedConfirmAction = ^{
-        [self dismissAlertViewController:vc];
-        if (confirmAction) {
-            confirmAction();
-        }
+        if (confirmAction) confirmAction();
     };
     
-    [vc setSlideDismissBlock:^{
-        [self dismissAlertViewController:vc];
-    }];
-    
-    [vc setTapDismissBlock:^{
-        [self dismissAlertViewController:vc];
-    }];
-    
+    vc.closeButtonClickedBlock = wrappedCloseActionBlock;
+    vc.slideDismissBlock = wrappedCloseActionBlock;
+    vc.tapDismissBlock = wrappedCloseActionBlock;
+
     [vc configWithImageView:imageView
                   lockImage:nil
            defaultLockState:NO
-            titleLabelText:title
-          contentLabelText:message
-      leftCancelButtonText:cancelButtonText
-    rightConfirmButtonText:confirmButtonText
+             titleLabelText:title
+           contentLabelText:message
+       leftCancelButtonText:cancelButtonText
+     rightConfirmButtonText:confirmButtonText
        rightBtnClickedBlock:wrappedConfirmAction
-      leftButtonClickedBlock:wrappedCancelAction];
+     leftButtonClickedBlock:wrappedCancelAction];
     
-    [vc setCornerRadius:11];
-    [vc setOnlyTopCornerClips:YES];
+    if (avatarURL.length > 0) {
+        [vc setCornerRadius:11];
+        [vc setOnlyTopCornerClips:YES];
+    } else {
+        [vc setUseCardUIStyle:YES];
+    }
     
     UIViewController *topVC = topView();
-    if (topVC) {
-        if ([vc respondsToSelector:@selector(presentOnViewController:)]) {
+    if (topVC
+        && [vc respondsToSelector:@selector(presentOnViewController:)]
+	    && !topVC.presentedViewController
+	    && ![topVC isBeingPresented]
+	    && ![topVC isBeingDismissed]) {
             [vc presentOnViewController:topVC];
-        }
+    } else {
+        return nil; 
     }
     
     return vc;
 }
-
 @end
