@@ -6008,7 +6008,8 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
         return;
     }
 
-    UIViewController *parentVC = self.parentViewController;
+    UIViewController *directParentVC = self.parentViewController;
+    UIViewController *parentVC = directParentVC;
     int maxIterations = 3;
     int count = 0;
 
@@ -6034,9 +6035,16 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
 
     NSString *currentReferString = self.referString;
 
-    BOOL useFullHeight = [currentReferString isEqualToString:@"general_search"] || [currentReferString isEqualToString:@"search_result"] ||
+    BOOL useFullHeight = [currentReferString isEqualToString:@"general_search"] || [currentReferString isEqualToString:@"search_result"] || [currentReferString isEqualToString:@"search_ecommerce"] ||
                          [currentReferString isEqualToString:@"close_friends_moment"] || [currentReferString isEqualToString:@"offline_mode"] || [currentReferString isEqualToString:@"challenge"] ||
                          [currentReferString isEqualToString:@"general_search_scan"] || currentReferString == nil;
+
+    if (!useFullHeight && [currentReferString isEqualToString:@"co_play_watch"]) {
+        Class richContentVCClass = NSClassFromString(@"AWEFriendsImpl.RichContentNewListViewController");
+        if (richContentVCClass && [directParentVC isKindOfClass:richContentVCClass]) {
+            useFullHeight = YES;
+        }
+    }
 
     if (!useFullHeight && [currentReferString isEqualToString:@"chat"]) {
         static NSNumber *shouldRestoreChat = nil;
@@ -7417,7 +7425,9 @@ static void findTargetViewInView(UIView *view) {
 }
 
 %ctor {
-    %init(DYYYSettingsGesture);
+    if (!DYYYGetBool(@"DYYYDisableSettingsGesture")) {
+        %init(DYYYSettingsGesture);
+    }
     if (DYYYGetBool(@"DYYYUserAgreementAccepted")) {
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{
