@@ -32,6 +32,8 @@ void *kViewModelKey = &kViewModelKey;
 #endif
 
 static id dyyyRemoteConfigChangedToken = nil;
+static char kDYYYWeatherViewGestureInstalledKey;
+static char kDYYYWeatherSubviewGestureInstalledKey;
 
 static void DYYYRemoveRemoteConfigObserver(void) {
     if (dyyyRemoteConfigChangedToken) {
@@ -40,7 +42,7 @@ static void DYYYRemoveRemoteConfigObserver(void) {
     }
 }
 %hook AWESettingBaseViewController
-- (bool)useCardUIStyle {
+- (BOOL)useCardUIStyle {
     return YES;
 }
 
@@ -96,15 +98,21 @@ static void DYYYRemoveRemoteConfigObserver(void) {
 - (void)layoutSubviews {
     %orig;
     self.userInteractionEnabled = YES;
-    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:[UIView class] action:@selector(openDYYYSettingsFromSender:)];
-    objc_setAssociatedObject(tapGesture, "targetView", self, OBJC_ASSOCIATION_ASSIGN);
-    [self addGestureRecognizer:tapGesture];
+    if (!objc_getAssociatedObject(self, &kDYYYWeatherViewGestureInstalledKey)) {
+        UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:[UIView class] action:@selector(openDYYYSettingsFromSender:)];
+        objc_setAssociatedObject(tapGesture, "targetView", self, OBJC_ASSOCIATION_ASSIGN);
+        [self addGestureRecognizer:tapGesture];
+        objc_setAssociatedObject(self, &kDYYYWeatherViewGestureInstalledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
 
     for (UIView *subview in self.subviews) {
         subview.userInteractionEnabled = YES;
-        UITapGestureRecognizer *subTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:[UIView class] action:@selector(openDYYYSettingsFromSender:)];
-        objc_setAssociatedObject(subTapGesture, "targetView", self, OBJC_ASSOCIATION_ASSIGN);
-        [subview addGestureRecognizer:subTapGesture];
+        if (!objc_getAssociatedObject(subview, &kDYYYWeatherSubviewGestureInstalledKey)) {
+            UITapGestureRecognizer *subTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:[UIView class] action:@selector(openDYYYSettingsFromSender:)];
+            objc_setAssociatedObject(subTapGesture, "targetView", self, OBJC_ASSOCIATION_ASSIGN);
+            [subview addGestureRecognizer:subTapGesture];
+            objc_setAssociatedObject(subview, &kDYYYWeatherSubviewGestureInstalledKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
 
         [subview.subviews enumerateObjectsUsingBlock:^(UIView *childView, NSUInteger idx, BOOL *stop) {
           if (![childView isKindOfClass:%c(AWELeftSideBarWeatherLabel)]) {
@@ -127,7 +135,8 @@ static void DYYYRemoveRemoteConfigObserver(void) {
 
     UIViewController *feedVC = [DYYYSettingsHelper findViewController:self];
     if (![feedVC isKindOfClass:%c(AWEFeedContainerViewController)]) {
-        feedVC = UIApplication.sharedApplication.keyWindow.rootViewController;
+        UIWindow *activeWindow = [DYYYUtils getActiveWindow];
+        feedVC = activeWindow.rootViewController ?: [DYYYUtils topView];
         while (feedVC && ![feedVC isKindOfClass:%c(AWEFeedContainerViewController)]) {
             feedVC = feedVC.presentedViewController;
         }
@@ -1947,14 +1956,22 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"detail" : @"",
             @"cellType" : @6,
             @"imageName" : @"ic_removeimage_outlined_20"},
-          @{
-              @"identifier" : @"DYYYForceDownloadEmotion",
-              @"title" : @"保存评论区表情包",
-              @"subTitle" : @"长按评论区表情本身保存",
-              @"detail" : @"",
-              @"cellType" : @37,
-              @"imageName" : @"ic_emoji_outlined"
-          },
+        @{
+            @"identifier" : @"DYYYForceDownloadCommentImage",
+            @"title" : @"保存评论区图片",
+            @"subTitle" : @"长按评论可保存所有实况和图片",
+            @"detail" : @"",
+            @"cellType" : @37,
+            @"imageName" : @"ic_image_outlined"
+        },
+        @{
+            @"identifier" : @"DYYYForceDownloadEmotion",
+            @"title" : @"保存评论区表情包",
+            @"subTitle" : @"长按评论或者长按表情包",
+            @"detail" : @"",
+            @"cellType" : @37,
+            @"imageName" : @"ic_emoji_outlined"
+        },
           @{@"identifier" : @"DYYYForceDownloadPreviewEmotion",
             @"title" : @"保存预览页表情包",
             @"detail" : @"",
@@ -2231,12 +2248,10 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
                                                  if ([selectedValue isEqualToString:DYYY_REMOTE_MODE_STRING]) {
                                                      [[NSUserDefaults standardUserDefaults] setBool:YES forKey:DYYY_REMOTE_CONFIG_FLAG_KEY];
-                                                     [[NSUserDefaults standardUserDefaults] synchronize];
                                                      refreshConfigConflictState();
                                                  } else {
                                                      if (wasRemote) {
                                                          [[NSUserDefaults standardUserDefaults] setBool:NO forKey:DYYY_REMOTE_CONFIG_FLAG_KEY];
-                                                         [[NSUserDefaults standardUserDefaults] synchronize];
                                                          refreshConfigConflictState();
                                                      }
                                                  }
@@ -2480,7 +2495,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                   [DYYYABTestHook loadLocalABTestConfig];
                                   [DYYYABTestHook applyFixedABTestData];
                                   [[NSUserDefaults standardUserDefaults] setBool:NO forKey:DYYY_REMOTE_CONFIG_FLAG_KEY];
-                                  [[NSUserDefaults standardUserDefaults] synchronize];
                                   [[NSNotificationCenter defaultCenter] postNotificationName:DYYY_REMOTE_CONFIG_CHANGED_NOTIFICATION object:nil];
                                   success = YES;
                                   message = @"配置已导入，部分设置需重启应用后生效";
@@ -2538,7 +2552,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                     if (success) {
                         [DYYYABTestHook cleanLocalABTestData];
                         [[NSUserDefaults standardUserDefaults] setBool:NO forKey:DYYY_REMOTE_CONFIG_FLAG_KEY];
-                        [[NSUserDefaults standardUserDefaults] synchronize];
                         [[NSNotificationCenter defaultCenter] postNotificationName:DYYY_REMOTE_CONFIG_CHANGED_NOTIFICATION object:nil];
                         // 删除成功后修改 SaveABTestConfigFile item 的状态
                         saveABTestConfigFileItemRef.detail = @"(文件已删除)";
@@ -2880,8 +2893,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                        // 保存用户输入的倍速值
                                        NSString *trimmedText = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                                        [[NSUserDefaults standardUserDefaults] setObject:trimmedText forKey:@"DYYYSpeedSettings"];
-                                       [[NSUserDefaults standardUserDefaults] synchronize];
-                                       speedSettingsItem.detail = trimmedText;
+speedSettingsItem.detail = trimmedText;
                                        [speedSettingsItem refreshCell];
                                      }
                                       onCancel:nil];
@@ -2902,8 +2914,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
         BOOL newValue = !autoRestoreSpeedItem.isSwitchOn;
         autoRestoreSpeedItem.isSwitchOn = newValue;
         [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:@"DYYYAutoRestoreSpeed"];
-        [[NSUserDefaults standardUserDefaults] synchronize];
-      };
+};
       [speedButtonItems addObject:autoRestoreSpeedItem];
 
       AWESettingItemModel *showXItem = [[%c(AWESettingItemModel) alloc] init];
@@ -2920,8 +2931,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
         BOOL newValue = !showXItem.isSwitchOn;
         showXItem.isSwitchOn = newValue;
         [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:@"DYYYSpeedButtonShowX"];
-        [[NSUserDefaults standardUserDefaults] synchronize];
-      };
+};
       [speedButtonItems addObject:showXItem];
       // 添加按钮大小配置项
       AWESettingItemModel *buttonSizeItem = [[%c(AWESettingItemModel) alloc] init];
@@ -2944,7 +2954,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                        NSInteger size = [text integerValue];
                                        if (size >= 20 && size <= 60) {
                                            [[NSUserDefaults standardUserDefaults] setFloat:size forKey:@"DYYYSpeedButtonSize"];
-                                           [[NSUserDefaults standardUserDefaults] synchronize];
                                            buttonSizeItem.detail = [NSString stringWithFormat:@"%.0f", (CGFloat)size];
                                            [buttonSizeItem refreshCell];
                                        } else {
@@ -2957,6 +2966,29 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       [speedButtonItems addObject:buttonSizeItem];
 
       [speedButtonItems addObject:speedSettingsItem];
+
+      NSMutableArray<AWESettingItemModel *> *speedDependentItems = [NSMutableArray array];
+      for (AWESettingItemModel *item in speedButtonItems) {
+          if (item != enableSpeedButton) {
+              [speedDependentItems addObject:item];
+          }
+      }
+      void (^refreshSpeedDependentItems)(void) = ^{
+        for (AWESettingItemModel *item in speedDependentItems) {
+            [DYYYSettingsHelper applyDependencyRulesForItem:item];
+            [item refreshCell];
+        }
+      };
+
+      refreshSpeedDependentItems();
+
+      void (^originalSpeedSwitchChangedBlock)(void) = enableSpeedButton.switchChangedBlock;
+      enableSpeedButton.switchChangedBlock = ^{
+        if (originalSpeedSwitchChangedBlock) {
+            originalSpeedSwitchChangedBlock();
+        }
+        refreshSpeedDependentItems();
+      };
 
       // 一键清屏section
       NSMutableArray<AWESettingItemModel *> *clearButtonItems = [NSMutableArray array];
@@ -2993,7 +3025,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                        // 确保输入值在有效范围内
                                        if (size >= 20 && size <= 60) {
                                            [[NSUserDefaults standardUserDefaults] setFloat:size forKey:@"DYYYEnableFloatClearButtonSize"];
-                                           [[NSUserDefaults standardUserDefaults] synchronize];
                                            clearButtonSizeItem.detail = [NSString stringWithFormat:@"%.0f", (CGFloat)size];
                                            [clearButtonSizeItem refreshCell];
                                        } else {
@@ -3208,59 +3239,70 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       // 设置委托
       DYYYBackupPickerDelegate *pickerDelegate = [[DYYYBackupPickerDelegate alloc] init];
       pickerDelegate.completionBlock = ^(NSURL *url) {
-        NSData *jsonData = [NSData dataWithContentsOfURL:url];
-
-        if (!jsonData) {
-            [DYYYUtils showToast:@"无法读取备份文件"];
+        if (!url) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [DYYYUtils showToast:@"未选择备份文件"];
+            });
             return;
         }
 
-        NSError *jsonError;
-        NSDictionary *dyyySettings = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+          NSData *jsonData = [NSData dataWithContentsOfURL:url];
 
-        if (jsonError || ![dyyySettings isKindOfClass:[NSDictionary class]]) {
-            [DYYYUtils showToast:@"备份文件格式错误"];
-            return;
-        }
+          if (!jsonData) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [DYYYUtils showToast:@"无法读取备份文件"];
+              });
+              return;
+          }
 
-        // 恢复图标文件
-        NSDictionary *iconBase64Dict = dyyySettings[@"DYYYIconsBase64"];
-        if (iconBase64Dict && [iconBase64Dict isKindOfClass:[NSDictionary class]]) {
-            NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-            NSString *dyyyFolderPath = [documentsPath stringByAppendingPathComponent:@"DYYY"];
+          NSError *jsonError;
+          NSDictionary *dyyySettings = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
 
-            // 确保DYYY文件夹存在
-            if (![[NSFileManager defaultManager] fileExistsAtPath:dyyyFolderPath]) {
-                [[NSFileManager defaultManager] createDirectoryAtPath:dyyyFolderPath withIntermediateDirectories:YES attributes:nil error:nil];
-            }
+          if (jsonError || ![dyyySettings isKindOfClass:[NSDictionary class]]) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [DYYYUtils showToast:@"备份文件格式错误"];
+              });
+              return;
+          }
 
-            // 从Base64还原图标文件
-            for (NSString *iconFileName in iconBase64Dict) {
-                NSString *base64String = iconBase64Dict[iconFileName];
-                if ([base64String isKindOfClass:[NSString class]]) {
-                    NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
-                    if (imageData) {
-                        NSString *iconPath = [dyyyFolderPath stringByAppendingPathComponent:iconFileName];
-                        [imageData writeToFile:iconPath atomically:YES];
-                    }
-                }
-            }
+          NSDictionary *iconBase64Dict = dyyySettings[@"DYYYIconsBase64"];
+          if (iconBase64Dict && [iconBase64Dict isKindOfClass:[NSDictionary class]]) {
+              NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+              NSString *dyyyFolderPath = [documentsPath stringByAppendingPathComponent:@"DYYY"];
+              NSFileManager *fileManager = [NSFileManager defaultManager];
 
-            NSMutableDictionary *cleanSettings = [dyyySettings mutableCopy];
-            [cleanSettings removeObjectForKey:@"DYYYIconsBase64"];
-            dyyySettings = cleanSettings;
-        }
+              if (![fileManager fileExistsAtPath:dyyyFolderPath]) {
+                  [fileManager createDirectoryAtPath:dyyyFolderPath withIntermediateDirectories:YES attributes:nil error:nil];
+              }
 
-        // 恢复设置
-        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-        for (NSString *key in dyyySettings) {
-            [defaults setObject:dyyySettings[key] forKey:key];
-        }
-        [defaults synchronize];
+              for (NSString *iconFileName in iconBase64Dict) {
+                  NSString *base64String = iconBase64Dict[iconFileName];
+                  if (![base64String isKindOfClass:[NSString class]]) {
+                      continue;
+                  }
+                  NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+                  if (imageData) {
+                      NSString *iconPath = [dyyyFolderPath stringByAppendingPathComponent:iconFileName];
+                      [imageData writeToFile:iconPath atomically:YES];
+                  }
+              }
 
-        [DYYYUtils showToast:@"设置已恢复，请重启应用以应用所有更改"];
+              NSMutableDictionary *cleanSettings = [dyyySettings mutableCopy];
+              [cleanSettings removeObjectForKey:@"DYYYIconsBase64"];
+              dyyySettings = cleanSettings;
+          }
 
-        [restoreItem refreshCell];
+          NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+          for (NSString *key in dyyySettings) {
+              [defaults setObject:dyyySettings[key] forKey:key];
+          }
+
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [DYYYUtils showToast:@"设置已恢复，请重启应用以应用所有更改"];
+            [restoreItem refreshCell];
+          });
+        });
       };
 
       static char kDYYYRestorePickerDelegateKey;
@@ -3346,7 +3388,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                                 [defaults removeObjectForKey:key];
                                             }
                                         }
-                                        [defaults synchronize];
                                         [DYYYUtils showToast:@"插件设置已清除，请重启应用"];
                                       }];
           }];
@@ -3499,7 +3540,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     aboutSection.itemArray = aboutItems;
 
     viewModel.sectionDataArray = @[ mainSection, cleanupSection, backupSection, aboutSection ];
-    objc_setAssociatedObject(settingsVC, kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(settingsVC, &kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [rootVC.navigationController pushViewController:(UIViewController *)settingsVC animated:YES];
 }
 

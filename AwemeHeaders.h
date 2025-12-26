@@ -152,6 +152,25 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)setListenVideoStatus:(NSInteger)status;
 @end
 
+@interface AWEABTestManager : NSObject
+@property(retain, nonatomic) NSMutableDictionary *consistentABTestDic;
+@property(copy, nonatomic) NSDictionary *abTestData;
+@property(copy, nonatomic) NSDictionary *performanceReversalDic;
+@property(nonatomic) BOOL performanceReversalEnabled;
+@property(nonatomic) BOOL handledNetFirstBackNotification;
+@property(nonatomic) BOOL lastUpdateByIncrement;
+@property(nonatomic) BOOL shouldPrintLog;
+@property(nonatomic) BOOL localABSettingEnabled;
+- (void)fetchConfiguration:(id)arg1;
+- (void)fetchConfigurationWithRetry:(BOOL)arg1 completion:(id)arg2;
+- (void)incrementalUpdateData:(id)arg1 unchangedKeyList:(id)arg2;
+- (void)overrideABTestData:(id)arg1 needCleanCache:(BOOL)arg2;
+- (void)setAbTestData:(id)arg1;
+- (void)_saveABTestData:(id)arg1;
+- (id)getValueOfConsistentABTestWithKey:(id)arg1;
++ (id)sharedManager;
+@end
+
 @interface AWELongPressPanelBaseViewModel : NSObject
 @property(nonatomic, copy) NSString *describeString;
 @property(nonatomic, assign) NSInteger enterMethod;
@@ -506,8 +525,15 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, copy) NSString *accessibilityLabel;
 @end
 
+// 评论区实况照片模型
+@interface AWECommentLivePhotoModel : NSObject
+@property(nonatomic, copy) NSArray *videoUrl;
+@end
+
 @interface AWECommentImageModel : NSObject
-@property(nonatomic, copy) NSString *originUrl;
+@property(nonatomic, strong) AWEURLModel *originUrl;
+@property(nonatomic, strong) AWEURLModel *mediumUrl;
+@property(nonatomic, strong) AWECommentLivePhotoModel *livePhotoModel;
 @end
 
 @class AWECommentModel;
@@ -522,11 +548,13 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface AWECommentLongPressPanelParam : NSObject
 - (AWECommentModel *)selectdComment;
+- (NSDictionary *)extraParams;
 @end
 
 @interface AWECommentModel : NSObject
 - (AWEIMStickerModel *)sticker;
 - (NSString *)content;
+- (NSArray<AWECommentImageModel *> *)imageList;
 @end
 
 @interface AWEIMStickerModel : NSObject
