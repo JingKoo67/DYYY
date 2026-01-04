@@ -1988,6 +1988,9 @@ static NSArray<NSString *> *dyyy_qualityRank = nil;
 %hook AWEPlayInteractionSpeedController
 
 static BOOL hasChangedSpeed = NO;
+static CGFloat currentLongPressSpeed = 0;
+static CGFloat initialTouchX = 0;
+static BOOL isGestureActive = NO;
 
 - (CGFloat)longPressFastSpeedValue {
     float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
@@ -1999,6 +2002,11 @@ static BOOL hasChangedSpeed = NO;
 
 - (void)changeSpeed:(double)speed {
     float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
+
+    if (isGestureActive && currentLongPressSpeed > 0) {
+        %orig(currentLongPressSpeed);
+        return;
+    }
 
     if (speed == 2.0) {
         if (!hasChangedSpeed) {
@@ -2020,6 +2028,52 @@ static BOOL hasChangedSpeed = NO;
     }
 }
 
+- (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture {
+    %orig;
+
+    if (!DYYYGetBool(@"DYYYEnableLongPressSpeedGesture")) {
+        return;
+    }
+
+    CGPoint location = [gesture locationInView:gesture.view];
+
+    static CGFloat initialTouchY = 0;
+
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        initialTouchY = location.y;
+        isGestureActive = YES;
+
+        float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
+        if (longPressSpeed == 0) {
+            longPressSpeed = 2.0;
+        }
+        currentLongPressSpeed = longPressSpeed;
+    }
+    else if (gesture.state == UIGestureRecognizerStateChanged && isGestureActive) {
+        CGFloat deltaY = location.y - initialTouchY;
+        CGFloat threshold = 10.0;
+
+        if (fabs(deltaY) > threshold) {
+            CGFloat speedChange;
+            speedChange = (deltaY > 0) ? 0.25 : -0.25;
+
+            CGFloat newSpeed = currentLongPressSpeed + speedChange;
+            newSpeed = MAX(0.5, MIN(3.0, newSpeed));
+
+            if (newSpeed != currentLongPressSpeed) {
+                currentLongPressSpeed = newSpeed;
+                initialTouchY = location.y;
+                [self changeSpeed:currentLongPressSpeed];
+            }
+        }
+    }
+    else if (gesture.state == UIGestureRecognizerStateEnded ||
+             gesture.state == UIGestureRecognizerStateCancelled) {
+        isGestureActive = NO;
+        currentLongPressSpeed = 0;
+        initialTouchY = 0;
+    }
+}
 %end
 
 %hook UILabel
@@ -2028,12 +2082,12 @@ static BOOL hasChangedSpeed = NO;
     UIView *superview = self.superview;
 
     if ([superview isKindOfClass:%c(AFDFastSpeedView)] && text) {
-        float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
-        if (longPressSpeed == 0) {
-            longPressSpeed = 2.0;
+        CGFloat displaySpeed = isGestureActive && currentLongPressSpeed > 0 ? currentLongPressSpeed : DYYYGetFloat(@"DYYYLongPressSpeed");
+        if (displaySpeed == 0) {
+            displaySpeed = 2.0;
         }
 
-        NSString *speedString = [NSString stringWithFormat:@"%.2f", longPressSpeed];
+        NSString *speedString = [NSString stringWithFormat:@"%.2f", displaySpeed];
         if ([speedString hasSuffix:@".00"]) {
             speedString = [speedString substringToIndex:speedString.length - 3];
         } else if ([speedString hasSuffix:@"0"] && [speedString containsString:@"."]) {
@@ -6024,18 +6078,21 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
         return;
     }
 
-    BOOL enableBlur = DYYYGetBool(@"DYYYEnableCommentBlur");
+    // BOOL enableBlur = DYYYGetBool(@"DYYYEnableCommentBlur");
     BOOL enableFS = DYYYGetBool(@"DYYYEnableFullScreen");
 
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
     Class DetailVCClass = NSClassFromString(@"AWEMixVideoPanelDetailTableViewController");
     Class PlayVCClass1 = NSClassFromString(@"AWEAwemePlayVideoViewController");
     Class PlayVCClass2 = NSClassFromString(@"AWEDPlayerFeedPlayerViewController");
+    Class PlayVCClass3 = NSClassFromString(@"AWEDPlayerViewController_Merge");
 
     BOOL isDetailVC = (DetailVCClass && [vc isKindOfClass:DetailVCClass]);
-    BOOL isPlayVC = ((PlayVCClass1 && [vc isKindOfClass:PlayVCClass1]) || (PlayVCClass2 && [vc isKindOfClass:PlayVCClass2]));
+    BOOL isPlayVC = ((PlayVCClass1 && [vc isKindOfClass:PlayVCClass1]) ||
+                     (PlayVCClass2 && [vc isKindOfClass:PlayVCClass2]) ||
+                     (PlayVCClass3 && [vc isKindOfClass:PlayVCClass3]));
 
-    if (isPlayVC && enableBlur) {
+    if (isPlayVC) {
         if (frame.origin.x != 0) {
             return;
         }
@@ -6342,6 +6399,10 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
             [(AWEDPlayerFeedPlayerViewController *)vc setVideoControllerPlaybackRate:newSpeed];
             speedApplied = YES;
         }
+        if ([vc isKindOfClass:objc_getClass("AWEDPlayerViewController_Merge")]) {
+            [(AWEAwemePlayVideoViewController *)vc setVideoControllerPlaybackRate:newSpeed];
+            speedApplied = YES;
+        }
     }
 
     if (!speedApplied) {
@@ -6419,6 +6480,73 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
 %end
 
 %hook AWEDPlayerFeedPlayerViewController
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        UIView *contentView = self.contentView;
+        if (contentView && contentView.superview) {
+            CGRect frame = contentView.frame;
+            CGFloat parentHeight = contentView.superview.frame.size.height;
+
+            if (frame.size.height == parentHeight - gCurrentTabBarHeight) {
+                frame.size.height = parentHeight;
+                contentView.frame = frame;
+            } else if (frame.size.height == parentHeight - (gCurrentTabBarHeight * 2)) {
+                frame.size.height = parentHeight - gCurrentTabBarHeight;
+                contentView.frame = frame;
+            }
+        }
+    }
+}
+
+- (void)setIsAutoPlay:(BOOL)arg0 {
+    %orig(arg0);
+    if (!DYYYShouldHandleSpeedFeatures()) {
+        return;
+    }
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYUserAgreementAccepted"]) {
+          float defaultSpeed = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYDefaultSpeed"];
+          if (defaultSpeed > 0 && defaultSpeed != 1) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [self setVideoControllerPlaybackRate:defaultSpeed];
+              });
+          }
+      }
+      float speed = getCurrentSpeed();
+      if (speed != 1.0) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [self adjustPlaybackSpeed:speed];
+          });
+      }
+    });
+}
+
+- (void)prepareForDisplay {
+    %orig;
+    if (!DYYYShouldHandleSpeedFeatures()) {
+        return;
+    }
+    BOOL autoRestoreSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"];
+    if (autoRestoreSpeed) {
+        setCurrentSpeedIndex(0);
+    }
+    float speed = getCurrentSpeed();
+    if (speed != 1.0) {
+        [self adjustPlaybackSpeed:speed];
+    }
+    updateSpeedButtonUI();
+}
+
+%new
+- (void)adjustPlaybackSpeed:(float)speed {
+    [self setVideoControllerPlaybackRate:speed];
+}
+
+%end
+
+%hook AWEDPlayerViewController_Merge
 
 - (void)viewDidLayoutSubviews {
     %orig;
@@ -7565,6 +7693,40 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     }
 
     return moduleModel;
+}
+
+%end
+
+@interface UIDropShadowView : UIView
+@end
+
+// 修复 ios26 模态透明效果
+%hook UIDropShadowView
+
+- (void)didMoveToSuperview {
+    %orig;
+
+    if (@available(iOS 26.0, *)) {
+        self.backgroundColor = UIColor.clearColor;
+        self.opaque = NO;
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+
+    if (@available(iOS 26.0, *)) {
+        self.backgroundColor = UIColor.clearColor;
+        self.opaque = NO;
+    }
+}
+
+- (void)setBackgroundColor:(UIColor *)color {
+    if (@available(iOS 26.0, *)) {
+        %orig(UIColor.clearColor);
+        return;
+    }
+    %orig;
 }
 
 %end
