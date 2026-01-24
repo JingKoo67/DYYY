@@ -6021,6 +6021,26 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
     return view;
 }
 
+- (void)setBackgroundColor:(UIColor *)backgroundColor {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [self setBackgroundColor:backgroundColor];
+        });
+        return;
+    }
+
+    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+        UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
+        if ([vc isKindOfClass:%c(AWEAwemeDetailTableViewController)] ||
+            [vc isKindOfClass:%c(AWEAwemeDetailCellViewController)]) {
+            %orig([UIColor clearColor]);
+            return;
+        }
+    }
+
+    %orig(backgroundColor);
+}
+
 - (void)layoutSubviews {
     %orig;
 
@@ -6262,23 +6282,18 @@ static void *DYYYTabBarHeightContext = &DYYYTabBarHeightContext;
         static NSNumber *shouldRestoreChat = nil;
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{
-            BOOL includeChat = NO;
-            Class managerClass = %c(AWEVersionUpdateManager);
-            if (managerClass && [managerClass respondsToSelector:@selector(sharedInstance)]) {
-                AWEVersionUpdateManager *manager = [managerClass sharedInstance];
-                if ([manager respondsToSelector:@selector(currentVersion)]) {
-                    NSString *currentVersion = manager.currentVersion;
-                    if (currentVersion.length > 0) {
-                        // 若版本小于35.5.0或大于等于37.2.0，均应 restore
-                        NSComparisonResult cmp1 = [DYYYUtils compareVersion:currentVersion toVersion:@"35.5.0"];
-                        NSComparisonResult cmp2 = [DYYYUtils compareVersion:currentVersion toVersion:@"37.2.0"];
-                        if (cmp1 == NSOrderedAscending || cmp2 != NSOrderedAscending) {
-                            includeChat = YES;
-                        }
-                    }
-                }
-            }
-            shouldRestoreChat = @(includeChat);
+          BOOL includeChat = NO;
+          Class managerClass = %c(AWEVersionUpdateManager);
+          if (managerClass && [managerClass respondsToSelector:@selector(sharedInstance)]) {
+              AWEVersionUpdateManager *manager = [managerClass sharedInstance];
+              if ([manager respondsToSelector:@selector(currentVersion)]) {
+                  NSString *currentVersion = manager.currentVersion;
+                  if (currentVersion.length > 0) {
+                      includeChat = ([DYYYUtils compareVersion:currentVersion toVersion:@"35.5.0"] == NSOrderedAscending);
+                  }
+              }
+          }
+          shouldRestoreChat = @(includeChat);
         });
 
         if (shouldRestoreChat.boolValue) {
@@ -7357,8 +7372,24 @@ static Class TagViewClass = nil;
 %hook AWEStoryProgressContainerView
 - (void)setCenter:(CGPoint)center {
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-    if ([vc isKindOfClass:NSClassFromString(@"AWEFeedPlayControlImpl.PureModePageCellViewController")] && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        center.y -= gCurrentTabBarHeight;
+    BOOL shouldAdjust = [vc isKindOfClass:NSClassFromString(@"AWEFeedPlayControlImpl.PureModePageCellViewController")] && DYYYGetBool(@"DYYYEnableFullScreen");
+    if (shouldAdjust) {
+        NSString *currentVersion = nil;
+        Class managerClass = %c(AWEVersionUpdateManager);
+        if (managerClass && [managerClass respondsToSelector:@selector(sharedInstance)]) {
+            id manager = [managerClass sharedInstance];
+            if ([manager respondsToSelector:@selector(currentVersion)]) {
+                currentVersion = [manager currentVersion];
+            }
+        }
+        
+        BOOL shouldApply = YES;
+        if (currentVersion && [DYYYUtils compareVersion:currentVersion toVersion:@"37.2.0"] != NSOrderedAscending) {
+            shouldApply = NO;
+        }
+        if (shouldApply) {
+            center.y -= gCurrentTabBarHeight;
+        }
     }
     %orig(center);
 }
