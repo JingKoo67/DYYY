@@ -14,6 +14,8 @@
 #import "DYYYOptionsSelectionView.h"
 
 #import "DYYYConstants.h"
+#import "DYYYFloatClearButton.h"
+#import "DYYYFloatSpeedButton.h"
 #import "DYYYSettingsHelper.h"
 #import "DYYYUtils.h"
 
@@ -34,6 +36,109 @@ void *kViewModelKey = &kViewModelKey;
 static id dyyyRemoteConfigChangedToken = nil;
 static char kDYYYWeatherViewGestureInstalledKey;
 static char kDYYYWeatherSubviewGestureInstalledKey;
+static NSString *const kDYYYFeedNowPlayingSettingTitle = @"屏蔽灵动岛抖音播放信息";
+static NSString *const kDYYYFeedNowPlayingSettingIdentifier = @"DYYYDisableFeedNowPlayingInfo";
+static NSString *const kDYYYFeedNowPlayingSVGIconName = @"ic_liveactivityplayslash_outlined_20";
+
+static UIImage *DYYYFeedNowPlayingSVGIcon(CGSize requestedSize) {
+    CGSize targetSize = requestedSize;
+    if (targetSize.width <= 0 || targetSize.height <= 0) {
+        targetSize = CGSizeMake(20, 20);
+    }
+
+    static NSCache<NSString *, UIImage *> *imageCache;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      imageCache = [[NSCache alloc] init];
+    });
+
+    NSString *cacheKey = NSStringFromCGSize(targetSize);
+    UIImage *cachedImage = [imageCache objectForKey:cacheKey];
+    if (cachedImage) {
+        return cachedImage;
+    }
+
+    UIGraphicsBeginImageContextWithOptions(targetSize, NO, 0);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    if (!context) {
+        UIGraphicsEndImageContext();
+        return nil;
+    }
+
+    CGContextScaleCTM(context, targetSize.width / 20.0, targetSize.height / 20.0);
+    UIColor *iconColor = [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:1.0];
+    [iconColor setFill];
+    [iconColor setStroke];
+
+    UIBezierPath *capsule = [UIBezierPath bezierPathWithRoundedRect:CGRectMake(1.25, 5.25, 17.5, 9.5) cornerRadius:4.7];
+    [capsule appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(2.75, 6.75, 14.5, 6.5) cornerRadius:3.2]];
+    capsule.usesEvenOddFillRule = YES;
+    [capsule fill];
+
+    UIBezierPath *play = [UIBezierPath bezierPath];
+    [play moveToPoint:CGPointMake(8.05, 7.438)];
+    [play addCurveToPoint:CGPointMake(8.95682, 6.93014)
+            controlPoint1:CGPointMake(8.05, 6.97219)
+            controlPoint2:CGPointMake(8.55983, 6.68648)];
+    [play addLineToPoint:CGPointMake(13.2548, 9.56814)];
+    [play addCurveToPoint:CGPointMake(13.2548, 10.4319)
+            controlPoint1:CGPointMake(13.6332, 9.80046)
+            controlPoint2:CGPointMake(13.6332, 10.1995)];
+    [play addLineToPoint:CGPointMake(8.95682, 13.0699)];
+    [play addCurveToPoint:CGPointMake(8.05, 12.562)
+            controlPoint1:CGPointMake(8.55983, 13.3135)
+            controlPoint2:CGPointMake(8.05, 13.0278)];
+    [play closePath];
+    [play fill];
+
+    CGContextSetBlendMode(context, kCGBlendModeClear);
+    CGContextSetLineCap(context, kCGLineCapRound);
+    CGContextSetLineWidth(context, 2.35);
+    CGContextMoveToPoint(context, 3.6, 2.65);
+    CGContextAddLineToPoint(context, 16.4, 17.35);
+    CGContextStrokePath(context);
+
+    CGContextSetBlendMode(context, kCGBlendModeNormal);
+    CGContextSetStrokeColorWithColor(context, iconColor.CGColor);
+    CGContextSetLineWidth(context, 1.5);
+    CGContextMoveToPoint(context, 3.6, 2.65);
+    CGContextAddLineToPoint(context, 16.4, 17.35);
+    CGContextStrokePath(context);
+
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    if (image) {
+        [imageCache setObject:image forKey:cacheKey];
+    }
+    return image;
+}
+
+@interface AWESettingsTableViewCell : UITableViewCell
+@property(nonatomic, strong) AWESettingItemModel *itemModel;
+@property(nonatomic, strong) UILabel *titleLabel;
+@property(nonatomic, strong) UIImageView *iconImageView;
+- (void)updateSubviews;
+- (void)updateSubviewsAfterLayout;
+@end
+
+static void DYYYApplyFeedNowPlayingIconToCell(AWESettingsTableViewCell *cell) {
+    AWESettingItemModel *itemModel = cell.itemModel;
+    if (![itemModel.identifier isEqualToString:kDYYYFeedNowPlayingSettingIdentifier]) {
+        return;
+    }
+
+    UIImageView *iconView = cell.iconImageView;
+    if (!iconView) {
+        return;
+    }
+
+    iconView.image = DYYYFeedNowPlayingSVGIcon(iconView.bounds.size);
+    iconView.contentMode = UIViewContentModeScaleAspectFit;
+    iconView.hidden = NO;
+    iconView.alpha = 1.0;
+    iconView.tintColor = cell.titleLabel.textColor;
+}
 
 static void DYYYRemoveRemoteConfigObserver(void) {
     if (dyyyRemoteConfigChangedToken) {
@@ -41,6 +146,7 @@ static void DYYYRemoveRemoteConfigObserver(void) {
         dyyyRemoteConfigChangedToken = nil;
     }
 }
+
 %hook AWESettingBaseViewController
 - (BOOL)useCardUIStyle {
     return YES;
@@ -53,10 +159,38 @@ static void DYYYRemoveRemoteConfigObserver(void) {
     return original;
 }
 
+- (void)viewDidLayoutSubviews {
+    %orig;
+    for (AWESettingsTableViewCell *cell in self.tableView.visibleCells) {
+        if ([cell isKindOfClass:%c(AWESettingsTableViewCell)]) {
+            DYYYApplyFeedNowPlayingIconToCell(cell);
+        }
+    }
+}
+
 - (void)dealloc {
     DYYYRemoveRemoteConfigObserver();
     %orig;
 }
+%end
+
+%hook AWESettingsTableViewCell
+
+- (void)setItemModel:(AWESettingItemModel *)itemModel {
+    %orig;
+    DYYYApplyFeedNowPlayingIconToCell(self);
+}
+
+- (void)updateSubviews {
+    %orig;
+    DYYYApplyFeedNowPlayingIconToCell(self);
+}
+
+- (void)updateSubviewsAfterLayout {
+    %orig;
+    DYYYApplyFeedNowPlayingIconToCell(self);
+}
+
 %end
 
 // 隐藏掉天气Label
@@ -515,17 +649,17 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"detail" : @"",
             @"cellType" : @37,
             @"imageName" : @"ic_eyeslash_outlined_16"},
+          @{@"identifier" : @"DYYYDisableFeedNowPlayingInfo",
+            @"title" : kDYYYFeedNowPlayingSettingTitle,
+            @"subTitle" : @"开启后禁止信息流视频播放信息显示在灵动岛",
+            @"detail" : @"",
+            @"cellType" : @37,
+            @"imageName" : kDYYYFeedNowPlayingSVGIconName},
           @{@"identifier" : @"DYYYEnableVideoHighestQuality",
             @"title" : @"提高视频画质",
             @"detail" : @"",
             @"cellType" : @6,
             @"imageName" : @"ic_squaretriangletwo_outlined_20"},
-          @{@"identifier" : @"DYYYDisableAllHDR",
-            @"title" : @"禁用全部视频图文HDR效果",
-            @"subTitle" : @"开启后全部视频图文将禁用 HDR 效果。与推荐过滤HDR不能同时打开。",
-            @"detail" : @"",
-            @"cellType" : @37,
-            @"imageName" : @"ic_sun_outlined"},
           @{@"identifier" : @"DYYYHideStatusbar",
             @"title" : @"隐藏系统顶栏",
             @"subTitle" : @"隐藏系统状态栏",
@@ -640,11 +774,11 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               @"cellType" : @20,
               @"imageName" : @"ic_playertime_outlined_20"
           },
-          @{@"identifier" : @"DYYYFilterFeedHDR",
-            @"title" : @"推荐过滤HDR",
-            @"subTitle" : @"开启后推荐流会屏蔽 HDR 视频。与禁用全部视频图文HDR效果不能同时打开。",
-            @"detail" : @"",
-            @"cellType" : @37,
+          @{@"identifier" : @"DYYYHDRMode",
+            @"title" : @"全局HDR设置",
+            @"subTitle" : @"开启并选择后全局屏蔽HDR效果/过滤HDR作品。",
+            @"detail" : @"关闭",
+            @"cellType" : @26,
             @"imageName" : @"ic_sun_outlined"},
           @{@"identifier" : @"DYYYNoAds",
             @"title" : @"启用屏蔽广告",
@@ -762,6 +896,20 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                   [item refreshCell];
                 };
                 [keywordListView show];
+              };
+          } else if ([item.identifier isEqualToString:@"DYYYHDRMode"]) {
+              NSString *savedMode = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYHDRMode"] ?: @"关闭";
+              item.detail = savedMode;
+              item.cellTappedBlock = ^{
+                NSArray *options = @[ @"关闭", @"全局屏蔽HDR效果", @"全局过滤HDR作品" ];
+                [DYYYOptionsSelectionView showWithPreferenceKey:@"DYYYHDRMode"
+                                                   optionsArray:options
+                                                     headerText:@"选择 HDR 处理模式"
+                                                 onPresentingVC:topView()
+                                               selectionChanged:^(NSString *selectedValue) {
+                                                 item.detail = selectedValue;
+                                                 [item refreshCell];
+                                               }];
               };
           }
           [filterItems addObject:item];
@@ -2983,8 +3131,9 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                        // 保存用户输入的倍速值
                                        NSString *trimmedText = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
                                        [[NSUserDefaults standardUserDefaults] setObject:trimmedText forKey:@"DYYYSpeedSettings"];
-speedSettingsItem.detail = trimmedText;
+                                       speedSettingsItem.detail = trimmedText;
                                        [speedSettingsItem refreshCell];
+                                       [FloatingSpeedButton reloadConfiguration];
                                      }
                                       onCancel:nil];
       };
@@ -3021,7 +3170,8 @@ speedSettingsItem.detail = trimmedText;
         BOOL newValue = !showXItem.isSwitchOn;
         showXItem.isSwitchOn = newValue;
         [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:@"DYYYSpeedButtonShowX"];
-};
+        [FloatingSpeedButton reloadConfiguration];
+      };
       [speedButtonItems addObject:showXItem];
       // 添加按钮大小配置项
       AWESettingItemModel *buttonSizeItem = [[%c(AWESettingItemModel) alloc] init];
@@ -3036,7 +3186,7 @@ speedSettingsItem.detail = trimmedText;
       buttonSizeItem.colorStyle = 0;
       buttonSizeItem.isEnable = YES;
       buttonSizeItem.cellTappedBlock = ^{
-        NSString *currentValue = [NSString stringWithFormat:@"%.0f", currentButtonSize];
+        NSString *currentValue = buttonSizeItem.detail ?: @"32";
         [DYYYSettingsHelper showTextInputAlert:@"设置按钮大小"
                                    defaultText:currentValue
                                    placeholder:@"请输入20-60之间的数值"
@@ -3046,6 +3196,7 @@ speedSettingsItem.detail = trimmedText;
                                            [[NSUserDefaults standardUserDefaults] setFloat:size forKey:@"DYYYSpeedButtonSize"];
                                            buttonSizeItem.detail = [NSString stringWithFormat:@"%.0f", (CGFloat)size];
                                            [buttonSizeItem refreshCell];
+                                           [FloatingSpeedButton reloadConfiguration];
                                        } else {
                                            [DYYYUtils showToast:@"请输入20-60之间的有效数值"];
                                        }
@@ -3077,6 +3228,7 @@ speedSettingsItem.detail = trimmedText;
         if (originalSpeedSwitchChangedBlock) {
             originalSpeedSwitchChangedBlock();
         }
+        [FloatingSpeedButton reloadConfiguration];
         refreshSpeedDependentItems();
       };
 
@@ -3106,7 +3258,7 @@ speedSettingsItem.detail = trimmedText;
       clearButtonSizeItem.colorStyle = 0;
       clearButtonSizeItem.isEnable = YES;
       clearButtonSizeItem.cellTappedBlock = ^{
-        NSString *currentValue = [NSString stringWithFormat:@"%.0f", currentClearButtonSize];
+        NSString *currentValue = clearButtonSizeItem.detail ?: @"40";
         [DYYYSettingsHelper showTextInputAlert:@"设置清屏按钮大小"
                                    defaultText:currentValue
                                    placeholder:@"请输入20-60之间的数值"
@@ -3117,6 +3269,7 @@ speedSettingsItem.detail = trimmedText;
                                            [[NSUserDefaults standardUserDefaults] setFloat:size forKey:@"DYYYEnableFloatClearButtonSize"];
                                            clearButtonSizeItem.detail = [NSString stringWithFormat:@"%.0f", (CGFloat)size];
                                            [clearButtonSizeItem refreshCell];
+                                           reloadClearButtonConfiguration();
                                        } else {
                                            [DYYYUtils showToast:@"请输入20-60之间的有效数值"];
                                        }
@@ -3196,13 +3349,33 @@ speedSettingsItem.detail = trimmedText;
           @"imageName" : @"ic_eyeslash_outlined_16"
       }];
       [clearButtonItems addObject:hideSpeedButton];
-      // 获取清屏按钮的当前开关状态
-      BOOL isEnabled = [DYYYSettingsHelper getUserDefaults:@"DYYYEnableFloatClearButton"];
+      NSMutableArray<AWESettingItemModel *> *clearDependentItems = [NSMutableArray array];
       for (AWESettingItemModel *item in clearButtonItems) {
-          if (item == enableClearButton) {
+          if (item != enableClearButton) {
+              [clearDependentItems addObject:item];
+          }
+      }
+      void (^refreshClearDependentItems)(void) = ^{
+        for (AWESettingItemModel *item in clearDependentItems) {
+            [DYYYSettingsHelper applyDependencyRulesForItem:item];
+            [item refreshCell];
+        }
+      };
+
+      refreshClearDependentItems();
+
+      for (AWESettingItemModel *item in clearButtonItems) {
+          void (^originalClearSwitchChangedBlock)(void) = item.switchChangedBlock;
+          if (!originalClearSwitchChangedBlock) {
               continue;
           }
-          item.isEnable = isEnabled;
+          item.switchChangedBlock = ^{
+            originalClearSwitchChangedBlock();
+            reloadClearButtonConfiguration();
+            if (item == enableClearButton) {
+                refreshClearDependentItems();
+            }
+          };
       }
 
       // 创建并组织所有section

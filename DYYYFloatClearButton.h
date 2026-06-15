@@ -23,6 +23,8 @@ void updateClearButtonVisibility(void);
 void showClearButton(void);
 void hideClearButton(void);
 void initTargetClassNames(void);
+void reloadClearButtonConfiguration(void);
+void DYYYApplyFloatClearProgressStateToView(UIView *view);
 
 #ifdef __cplusplus
 }
@@ -38,6 +40,7 @@ void initTargetClassNames(void);
 @property(nonatomic, strong) NSTimer *checkTimer;
 @property(nonatomic, strong) NSTimer *fadeTimer;
 - (void)resetFadeTimer;
+- (void)loadSavedPosition;
 - (void)hideUIElements;
 - (void)findAndHideViews:(NSArray *)classNames;
 - (void)safeResetState;
