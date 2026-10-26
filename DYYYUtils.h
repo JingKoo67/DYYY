@@ -8,8 +8,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class YYAnimatedImageView;
 @class AVAssetTrack;
+@class AVMetadataItem;
 
 @interface DYYYUtils : NSObject
+
++ (NSString *)authorProfileURL:(AWEUserModel *)author;
++ (NSString *)compactAlbumURL:(NSString *)rawURL;
++ (NSString *)albumDescriptionForAwemeModel:(AWEAwemeModel *)awemeModel authorProfileURL:(NSString *)authorProfileURL workURL:(NSString *)workURL;
++ (NSURL *)temporaryImageURLByEmbeddingDescription:(NSString *)albumDescription intoImageAtURL:(NSURL *)imageURL;
++ (NSArray<AVMetadataItem *> *)metadataItemsByAppendingDescription:(NSString *)albumDescription toItems:(NSArray<AVMetadataItem *> *)items;
++ (void)writeDescription:(NSString *)albumDescription toVideoAtURL:(NSURL *)videoURL completion:(void (^)(NSURL *outputURL))completion;
+
 
 #pragma mark - Public Model Filtering Utilities (公共模型过滤工具)
 
@@ -105,6 +114,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)usesDouyinLightBackground;
 
 #pragma mark - Public File Management (公共文件管理)
+
+/// 为一次下载创建独立文件名，避免相同 URL 路径的并发任务覆盖彼此。
++ (NSURL *)uniqueTemporaryFileURLWithFileName:(NSString *)fileName;
 
 /**格式化大小
  * 将大小转换为易读的格式
